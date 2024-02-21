@@ -184,6 +184,7 @@ export function createEmptyCacheNode(): CacheNode {
     prefetchRsc: null,
     parallelRoutes: new Map(),
     lazyDataResolved: false,
+    loading: null,
   }
 }
 
@@ -677,6 +678,7 @@ function Router({
                     // Root node always has `url`
                     // Provided in AppTreeContext to ensure it can be overwritten in layout-router
                     url: canonicalUrl,
+                    loading: cache.loading,
                   }}
                 >
                   {content}
