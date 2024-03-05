@@ -123,6 +123,13 @@ export function getDefineEnv({
     'process.env.__NEXT_CLIENT_ROUTER_D_FILTER': JSON.stringify(
       clientRouterFilters?.dynamicFilter
     ),
+    'process.env.__NEXT_CLIENT_ROUTER_CACHE_STALETIME_MS': JSON.stringify(
+      config.experimental.clientRouterCache
+        ? 31556952000 // 1 year (ms)
+        : config.experimental.clientRouterCache === false
+        ? 0
+        : 30000 // 30 seconds (ms)
+    ),
     'process.env.__NEXT_OPTIMISTIC_CLIENT_CACHE': JSON.stringify(
       config.experimental.optimisticClientCache
     ),

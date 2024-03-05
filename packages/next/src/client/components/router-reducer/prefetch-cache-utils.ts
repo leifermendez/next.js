@@ -8,6 +8,7 @@ import {
   type PrefetchCacheEntry,
   PrefetchKind,
   type ReadonlyReducerState,
+  PREFETCH_STALE_TIME,
 } from './router-reducer-types'
 import { prefetchQueue } from './reducers/prefetch-reducer'
 
@@ -82,10 +83,19 @@ export function getOrCreatePrefetchCacheEntry({
       existingCacheEntry.kind !== PrefetchKind.FULL &&
       kind === PrefetchKind.FULL
 
-    // If the cache entry isn't reusable, rather than returning it, we want to create a new entry.
-    const hasReusablePrefetch =
+    const hasReusableLoadingState =
+      // If staletime is 0, we'd be throwing away the prefetch entry every navigation.
+      // This means we'd never get a chance to re-use the previous loading state, de-opting out of instant navigations.
+      PREFETCH_STALE_TIME === 0 &&
+      (existingCacheEntry.loadingStatus === PrefetchCacheEntryStatus.fresh ||
+        existingCacheEntry.loadingStatus === PrefetchCacheEntryStatus.reusable)
+    const hasReusableData =
       existingCacheEntry.status === PrefetchCacheEntryStatus.reusable ||
       existingCacheEntry.status === PrefetchCacheEntryStatus.fresh
+
+    // we'll let the router use the existing prefetch entry if anything can be reused (loading state, or the data itself)
+    // otherwise we will fetch fresh data from the server and update the cache entry
+    const hasReusablePrefetch = hasReusableLoadingState || hasReusableData
 
     if (switchedToFullPrefetch || !hasReusablePrefetch) {
       return createLazyPrefetchEntry({
@@ -122,7 +132,8 @@ export function getOrCreatePrefetchCacheEntry({
     kind:
       kind ||
       // in dev, there's never gonna be a prefetch entry so we want to prefetch here
-      (process.env.NODE_ENV === 'development'
+      // when staletime is 0, there'll never be a "FULL" prefetch kind, so we default to auto
+      (process.env.NODE_ENV === 'development' || PREFETCH_STALE_TIME === 0
         ? PrefetchKind.AUTO
         : PrefetchKind.TEMPORARY),
   })
@@ -259,7 +270,6 @@ export function prunePrefetchCache(
 }
 
 const FIVE_MINUTES = 5 * 60 * 1000
-const THIRTY_SECONDS = 30 * 1000
 
 /**
  * This function is used to determine the cache status of the loading state of a prefetch cache entry.
@@ -287,8 +297,15 @@ function getPrefetchEntryCacheStatus({
   prefetchTime,
   lastUsedTime,
 }: PrefetchCacheEntry): PrefetchCacheEntryStatus {
-  // if the cache entry was prefetched or read less than 30s ago, then we want to re-use it
-  if (Date.now() < (lastUsedTime ?? prefetchTime) + THIRTY_SECONDS) {
+  if (PREFETCH_STALE_TIME === 0) {
+    // a value of 0 means we never want to use the prefetch data, only the prefetched loading state (if it exists)
+    // we mark it stale here so that the router will not attempt to apply the cache node data and will instead know to lazily
+    // fetch the full data
+    return PrefetchCacheEntryStatus.stale
+  }
+
+  // if the cache entry was prefetched or read less than the specified staletime window, then we want to re-use it
+  if (Date.now() < (lastUsedTime ?? prefetchTime) + PREFETCH_STALE_TIME) {
     return lastUsedTime
       ? PrefetchCacheEntryStatus.reusable
       : PrefetchCacheEntryStatus.fresh
