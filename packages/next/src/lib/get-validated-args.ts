@@ -1,4 +1,4 @@
-import arg from 'next/dist/compiled/arg/index.js'
+import arg from 'next/dist/compiled/arg'
 import { printAndExit } from '../server/lib/utils'
 import isError from './is-error'
 
